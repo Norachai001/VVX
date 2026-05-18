@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 type Athlete = {
@@ -14,13 +14,8 @@ type Athlete = {
   experience: string;
   achievement: string;
   status: "pending" | "approved" | "rejected";
+  submittedToStaff?: boolean;
 };
-
-const MOCK_ATHLETES: Athlete[] = [
-  { id: "1", firstName: "สมชาย", lastName: "ใจดี", studentId: "66027012", faculty: "วิทยาศาสตร์", sport: "ฟุตบอล", position: "กองหน้า", experience: "3-5 ปี", achievement: "แชมป์กีฬาเขต 2566", status: "pending" },
-  { id: "2", firstName: "สมหญิง", lastName: "รักดี", studentId: "66027013", faculty: "วิศวกรรมศาสตร์", sport: "ฟุตบอล", position: "กองกลาง", experience: "1-3 ปี", achievement: "", status: "pending" },
-  { id: "3", firstName: "มานะ", lastName: "สู้งาน", studentId: "65027001", faculty: "บริหาร", sport: "ฟุตบอล", position: "ผู้รักษาประตู", experience: "มากกว่า 5 ปี", achievement: "เหรียญทองกีฬาแห่งชาติ", status: "approved" },
-];
 
 const STATUS_LABEL = {
   pending: { label: "รอพิจารณา", className: "bg-yellow-100 text-yellow-800" },
@@ -30,23 +25,64 @@ const STATUS_LABEL = {
 
 export default function ClubAthletesPage() {
   const router = useRouter();
-  const [athletes, setAthletes] = useState<Athlete[]>(MOCK_ATHLETES);
+  const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [loading, setLoading] = useState(true);
+
+  // Hardcoding club for demo, in real app extract from session/URL
+  const CLUB_NAME = "ฟุตบอล";
+
+  useEffect(() => {
+    fetch(`/api/registrations?club=${encodeURIComponent(CLUB_NAME)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.registrations) {
+          // Filter out ones already submitted to staff
+          setAthletes(data.registrations.filter((a: Athlete) => !a.submittedToStaff));
+        }
+      })
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = athletes.filter((a) => {
-    const matchSearch = `${a.firstName} ${a.lastName} ${a.studentId}`.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = `${a.firstName || ''} ${a.lastName || ''} ${a.studentId || ''}`.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "all" || a.status === filterStatus;
     return matchSearch && matchStatus;
   });
 
-  const handleApprove = (id: string) =>
-    setAthletes((prev) => prev.map((a) => (a.id === id ? { ...a, status: "approved" } : a)));
+  const handleApprove = async (id: string) => {
+    try {
+      await fetch(`/api/registrations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "approved" }),
+      });
+      setAthletes((prev) => prev.map((a) => (a.id === id ? { ...a, status: "approved" } : a)));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-  const handleReject = (id: string) =>
-    setAthletes((prev) => prev.map((a) => (a.id === id ? { ...a, status: "rejected" } : a)));
+  const handleReject = async (id: string) => {
+    try {
+      await fetch(`/api/registrations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "rejected" }),
+      });
+      setAthletes((prev) => prev.map((a) => (a.id === id ? { ...a, status: "rejected" } : a)));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const pendingCount = athletes.filter((a) => a.status === "pending").length;
+
+  if (loading) {
+    return <div className="min-h-screen bg-gray-50 py-8 px-4 flex items-center justify-center text-gray-500">กำลังโหลดข้อมูล...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -54,7 +90,7 @@ export default function ClubAthletesPage() {
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">รายชื่อนักกีฬา</h1>
-            <p className="text-gray-500 text-sm mt-1">ชมรมฟุตบอล — รอพิจารณา {pendingCount} คน</p>
+            <p className="text-gray-500 text-sm mt-1">ชมรม{CLUB_NAME} — รอพิจารณา {pendingCount} คน</p>
           </div>
           <button
             onClick={() => router.push("/club/review")}
@@ -95,14 +131,14 @@ export default function ClubAthletesPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-gray-900">{a.firstName} {a.lastName}</span>
-                    <span className="text-gray-400 text-sm">#{a.studentId}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_LABEL[a.status].className}`}>
-                      {STATUS_LABEL[a.status].label}
+                    <span className="font-medium text-gray-900">{a.firstName || '-'} {a.lastName || '-'}</span>
+                    <span className="text-gray-400 text-sm">#{a.studentId || '-'}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_LABEL[a.status]?.className}`}>
+                      {STATUS_LABEL[a.status]?.label}
                     </span>
                   </div>
                   <div className="text-sm text-gray-500 space-y-0.5">
-                    <p>{a.faculty} — {a.sport} ({a.position})</p>
+                    <p>{a.faculty || '-'} — {a.sport} ({a.position})</p>
                     <p>ประสบการณ์: {a.experience}</p>
                     {a.achievement && <p>ผลงาน: {a.achievement}</p>}
                   </div>

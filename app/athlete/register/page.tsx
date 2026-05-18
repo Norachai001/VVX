@@ -46,9 +46,30 @@ export default function AthleteRegisterPage() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      console.log("submit", { ...MOCK_STUDENT, ...form, files: files.map((f) => f.name) });
-      await new Promise((r) => setTimeout(r, 1000));
+      const formData = new FormData();
+      formData.append("sport", form.sport);
+      formData.append("position", form.position);
+      formData.append("experience", form.experience);
+      formData.append("achievement", form.achievement);
+      formData.append("note", form.note);
+      
+      files.forEach((file) => {
+        formData.append("files", file);
+      });
+
+      const res = await fetch("/api/registrations", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to submit registration");
+      }
+
       router.push("/athlete/status");
+    } catch (error) {
+      console.error(error);
+      alert("เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่อีกครั้ง");
     } finally {
       setLoading(false);
     }

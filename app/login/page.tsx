@@ -19,10 +19,20 @@ export default function LoginPage() {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const token = await userCredential.user.getIdTokenResult();
-      const role = (token.claims.role as string) ?? "athlete";
+      const token = await userCredential.user.getIdToken();
 
-      document.cookie = `role=${role}; path=/`;
+      const res = await fetch("/api/auth/verify-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken: token }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to verify token on server");
+      }
+
+      const data = await res.json();
+      const role = data.role || "athlete";
 
       if (role === "athlete") router.push("/athlete/register");
       else if (role === "club") router.push("/club/athletes");
@@ -37,7 +47,7 @@ export default function LoginPage() {
         } else if (code === "auth/invalid-email") {
           setError("รูปแบบอีเมลไม่ถูกต้อง");
         } else {
-          setError("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง");
+          setError("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง: " + err.message);
         }
       }
     } finally {
