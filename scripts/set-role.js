@@ -1,6 +1,6 @@
-import fs from 'fs';
-import path from('path');
-import admin from('firebase-admin');
+const fs = require('fs');
+const path = require('path');
+const admin = require('firebase-admin');
 
 // Load .env.local manually so we don't need dotenv
 const envPath = path.join(__dirname, '../.env.local');

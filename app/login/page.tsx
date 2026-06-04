@@ -1,58 +1,60 @@
 "use client";
 
-import { useState } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const errorParam = params.get("error");
+      if (errorParam) {
+        if (errorParam === "sso_failed") setError("เกิดข้อผิดพลาดในการเข้าสู่ระบบด้วย SSO");
+        else setError(`เกิดข้อผิดพลาด: ${errorParam}`);
+
+        // Clean up URL without reloading
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, []);
+
+  // ===== Traditional Login (ชั่วคราว — ไม่เรียก API) =====
+  // บัญชีทดสอบ: athlete@up.ac.th / club@up.ac.th / staff@up.ac.th (password: 123456)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const token = await userCredential.user.getIdToken();
+    // บัญชีทดสอบ (hardcoded)
+    const testAccounts: Record<string, { password: string; role: string }> = {
+      "athlete@up.ac.th": { password: "Test@up2026", role: "athlete" },
+      "club@up.ac.th": { password: "Test@up2026", role: "club" },
+      "staff@up.ac.th": { password: "Test@up2026", role: "staff" },
+    };
 
-      const res = await fetch("/api/auth/verify-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken: token }),
-      });
+    // จำลองหน่วงเวลา
+    await new Promise((r) => setTimeout(r, 500));
 
-      if (!res.ok) {
-        throw new Error("Failed to verify token on server");
-      }
+    const account = testAccounts[email];
 
-      const data = await res.json();
-      const role = data.role || "athlete";
-
-      if (role === "athlete") router.push("/athlete/register");
-      else if (role === "club") router.push("/club/athletes");
-      else if (role === "staff") router.push("/staff/applications");
-      else setError("ไม่พบสิทธิ์การเข้าใช้งาน กรุณาติดต่อเจ้าหน้าที่");
-
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        const code = (err as { code?: string }).code;
-        if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {
-          setError("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
-        } else if (code === "auth/invalid-email") {
-          setError("รูปแบบอีเมลไม่ถูกต้อง");
-        } else {
-          setError("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง: " + err.message);
-        }
-      }
-    } finally {
+    if (account && password === account.password) {
+      const role = account.role;
+      if (role === "athlete") window.location.href = "/athlete/register";
+      else if (role === "club") window.location.href = "/club/athletes";
+      else if (role === "staff") window.location.href = "/staff/applications";
+    } else {
+      setError("อีเมลหรือรหัสผ่านไม่ถูกต้อง (ทดสอบ: athlete@up.ac.th / Test@up2026)");
       setLoading(false);
     }
+  };
+
+  const handleSSOLogin = () => {
+    setLoading(true);
+    window.location.href = "/api/auth/sso";
   };
 
   return (
@@ -102,9 +104,63 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
           >
-            {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+            {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ (Domain Login)"}
           </button>
         </form>
+
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">หรือ</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleSSOLogin}
+            disabled={loading}
+            type="button"
+            className="mt-4 w-full bg-white border border-gray-300 hover:bg-gray-50 disabled:bg-gray-100 text-gray-700 font-medium py-2.5 rounded-lg text-sm transition-colors"
+          >เข้าสู่ระบบด้วย SSO</button>
+        </div>
+
+        {/* Quick Access — เข้าถึงโดยไม่ต้อง Login */}
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">เข้าถึงโดยตรง</span>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <a
+              href="/club/athletes"
+              className="flex flex-col items-center justify-center gap-1.5 px-3 py-3 rounded-lg border border-gray-300 hover:border-blue-400 hover:bg-blue-50 text-gray-700 hover:text-blue-700 text-sm font-medium transition-colors"
+            >
+              <span className="text-lg">🏟️</span>
+              <span>Club</span>
+            </a>
+            <a
+              href="/staff/applications"
+              className="flex flex-col items-center justify-center gap-1.5 px-3 py-3 rounded-lg border border-gray-300 hover:border-green-400 hover:bg-green-50 text-gray-700 hover:text-green-700 text-sm font-medium transition-colors"
+            >
+              <span className="text-lg">👨‍💼</span>
+              <span>Staff</span>
+            </a>
+            <a
+              href="/athlete/register"
+              className="flex flex-col items-center justify-center gap-1.5 px-3 py-3 rounded-lg border border-gray-300 hover:border-orange-400 hover:bg-orange-50 text-gray-700 hover:text-orange-700 text-sm font-medium transition-colors"
+            >
+              <span className="text-lg">🏃</span>
+              <span>Athlete</span>
+            </a>
+          </div>
+        </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
           หากมีปัญหาการเข้าใช้งาน กรุณาติดต่องานกิจการนิสิต

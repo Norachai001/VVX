@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import prisma from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = request.cookies.get("session")?.value;
+    const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const decodedClaims = await adminAuth.verifySessionCookie(session);
-    if (decodedClaims.role !== "staff") {
+    if (session.role !== "staff") {
       return NextResponse.json({ error: "Forbidden: Only staff can perform this action" }, { status: 403 });
     }
 
@@ -30,9 +30,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
 
-    await adminDb.collection("registrations").doc(id).update({
-      staffStatus: status,
-      updatedAt: new Date(),
+    await prisma.registration.update({
+      where: { id },
+      data: {
+        staffStatus: status,
+      },
     });
 
     return NextResponse.json({ success: true, id, status }, { status: 200 });
